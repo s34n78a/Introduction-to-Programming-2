@@ -1,7 +1,8 @@
 # include <stdio.h>
 
+static int total = 0;
+
 void show_parenthesis(int n){
-    static int total = 0;
     if (n == 1) {
         printf("1");
         total = 1;
@@ -28,5 +29,6 @@ int main(void){
     int n;
     scanf("%d", &n);
     show_parenthesis(n);
+    printf("\nTotal: %d\n", total);
     return 0;
 }
