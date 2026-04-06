@@ -34,27 +34,53 @@ typedef struct SearchResult {
 //     int step;
 // } QueueNode;
 
-const int QUEEN_DIRS[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
-const int ROOK_DIRS[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-const int KNIGHT_DIRS[8][2] = {{-1, 2}, {1, 2}, {-1, -2}, {1, -2}, {2, 1}, {2, -1}, {-2, 1}, {-2, -1}};
-const int BISHOP_DIRS[4][2] = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+int QUEEN_DIRS[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+int ROOK_DIRS[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+int KNIGHT_DIRS[8][2] = {{-1, 2}, {1, 2}, {-1, -2}, {1, -2}, {2, 1}, {2, -1}, {-2, 1}, {-2, -1}};
+int BISHOP_DIRS[4][2] = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
 
-int check_new_position(Position target_pos, GameState state) {
+int is_movable_piece(char type) {
+    return type == 'Q' || type == 'R' || type == 'B' || type == 'N';
+}
+
+void get_piece_dirs(char type, int (**dirs)[2], int *len_dirs) {
+    if (type == 'Q') {
+        *dirs = QUEEN_DIRS;
+        *len_dirs = 8;
+    }
+    else if (type == 'R') {
+        *dirs = ROOK_DIRS;
+        *len_dirs = 4;
+    }
+    else if (type == 'B') {
+        *dirs = BISHOP_DIRS;
+        *len_dirs = 4;
+    }
+    else {
+        *dirs = KNIGHT_DIRS;
+        *len_dirs = 8;
+    }
+}
+
+int check_new_position(Position target_pos, const GameState *state) {
     // check player's pieces
-    for (int piece_id = 0; piece_id < state.player_count; piece_id++)
+    for (int piece_id = 0; piece_id < state->player_count; piece_id++)
     {
-        if (target_pos.x == state.player[piece_id].pos.x || target_pos.y == state.player[piece_id].pos.y)
+        if (target_pos.x == state->player[piece_id].pos.x && target_pos.y == state->player[piece_id].pos.y)
         {
+            //printf("(%d, %d) is blocked by player's %c piece at position (%d, %d)\n", target_pos.x, target_pos.y, state.player[piece_id].type, state.player[piece_id].pos.x, state.player[piece_id].pos.y); // debug print
             return 1;
         }
     }
 
+    //printf("check opponent's pieces for position (%d, %d)\n", target_pos.x, target_pos.y); // debug print
     // check opponent's pieces
-    for (int piece_id = 0; piece_id < state.opponent_count; piece_id++)
+    for (int piece_id = 0; piece_id < state->opponent_count; piece_id++)
     {
-        if (target_pos.x == state.opponent[piece_id].pos.x || target_pos.y == state.opponent[piece_id].pos.y)
+        if (target_pos.x == state->opponent[piece_id].pos.x && target_pos.y == state->opponent[piece_id].pos.y)
         {
-            if (state.opponent[piece_id].type == 'K')
+            //printf("Blocked by opponent's %c piece at position (%d, %d)\n", state.opponent[piece_id].type, state.opponent[piece_id].pos.x, state.opponent[piece_id].pos.y); // debug print
+            if (state->opponent[piece_id].type == 'K')
             {
                 return 2;
             }
@@ -66,51 +92,39 @@ int check_new_position(Position target_pos, GameState state) {
     return 0;
 }
 
-int check_piece_can_capture(Piece current_piece, Position enemy_king, GameState state) {
+int check_piece_can_capture(Piece current_piece, const GameState *state) {
     // Implement the logic to check if the piece can capture the opponent's king
     // based on its type and the current game state.
     // This function should return 1 if it can capture, and 0 otherwise.
     
-    int (*dirs)[2];
+    int (*dirs)[2]; // pointer to the direction array for the current piece type
+    int len_dirs = 0; // length of the direction array for the current piece type
 
     // type Q, R, B (similar logic with unlimitd range, just different directions):
     if (current_piece.type == 'Q' || current_piece.type == 'R' || current_piece.type == 'B')
     {
+        get_piece_dirs(current_piece.type, &dirs, &len_dirs);
 
-        // type Q:
-        if (current_piece.type == 'Q')
+        //printf("(%d,%d)", dirs[4][0], dirs[4][1]); // debug print
+        for (int dir_id = 0; dir_id < len_dirs; dir_id++)
         {
-            dirs = QUEEN_DIRS;
-        }
-        
-        // type R:
-        else if (current_piece.type == 'R')
-        {
-            dirs = ROOK_DIRS;
-        }
-
-        // type B:
-        else if (current_piece.type == 'B')
-        {
-            dirs = BISHOP_DIRS;
-        }
-
-        for (int dir_id = 0; dir_id < sizeof(dirs)/sizeof(dirs[0]); dir_id++)
-        {
-            for (int dist = 0; dist < 7; dist++)
+            //printf("Checking direction (%d, %d) for piece type %c\n", dirs[dir_id][0], dirs[dir_id][1], current_piece.type); // debug print
+            for (int dist = 1; dist < 8; dist++)
             {
                 Position new_pos;
 
-                new_pos.x = current_piece.pos.x + dirs[dir_id][0];
-                new_pos.y = current_piece.pos.y + dirs[dir_id][1];
+                new_pos.x = current_piece.pos.x + dirs[dir_id][0]*dist;
+                new_pos.y = current_piece.pos.y + dirs[dir_id][1]*dist;
 
                 //boundary check
                 if (new_pos.x < 0 || new_pos.x > 7 || new_pos.y < 0 || new_pos.y > 7)
                 {
-                    continue;
+                    break;
                 }
 
                 int check = check_new_position(new_pos, state);
+
+                //printf("Checking new position (%d, %d) for piece type %c: check result = %d\n", new_pos.x, new_pos.y, current_piece.type, check); // debug print
                 
                 if (check == 1)
                 {
@@ -127,9 +141,9 @@ int check_piece_can_capture(Piece current_piece, Position enemy_king, GameState 
     // type N:
     else if (current_piece.type == 'N')
     {
-        dirs = KNIGHT_DIRS;
+        get_piece_dirs(current_piece.type, &dirs, &len_dirs);
 
-        for (int dir_id = 0; dir_id < 4; dir_id++)
+        for (int dir_id = 0; dir_id < len_dirs; dir_id++)
         {
             Position new_pos;
 
@@ -144,11 +158,7 @@ int check_piece_can_capture(Piece current_piece, Position enemy_king, GameState 
 
             int check = check_new_position(new_pos, state);
             
-            if (check == 1)
-            {
-                break; // blocked by other piece, can't move further in this direction
-            }
-            else if (check == 2)
+            if (check == 2)
             {
                 return 1; // can capture king
             }
@@ -156,6 +166,92 @@ int check_piece_can_capture(Piece current_piece, Position enemy_king, GameState 
     }
 
     return 0; // can't capture king
+}
+
+int find_one_move_capture(const GameState *state, Position enemy_king, Move *capture_move) {
+    for (int piece_id = 0; piece_id < state->player_count; piece_id++)
+    {
+        if (!is_movable_piece(state->player[piece_id].type))
+        {
+            continue;
+        }
+
+        if (check_piece_can_capture(state->player[piece_id], state))
+        {
+            capture_move->start = state->player[piece_id].pos;
+            capture_move->end = enemy_king;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int try_first_move_and_capture(GameState *state, int piece_id, Position enemy_king, SearchResult *result) {
+    Piece current_piece = state->player[piece_id];
+    Position original_pos = current_piece.pos;
+    int (*dirs)[2];
+    int len_dirs = 0;
+
+    if (!is_movable_piece(current_piece.type))
+    {
+        return 0;
+    }
+
+    get_piece_dirs(current_piece.type, &dirs, &len_dirs);
+    int is_knight = (current_piece.type == 'N');
+    int max_dist = is_knight ? 1 : 7;
+
+    for (int dir_id = 0; dir_id < len_dirs; dir_id++)
+    {
+        for (int dist = 1; dist <= max_dist; dist++)
+        {
+            Position new_pos;
+            new_pos.x = original_pos.x + dirs[dir_id][0] * dist;
+            new_pos.y = original_pos.y + dirs[dir_id][1] * dist;
+
+            if (new_pos.x < 0 || new_pos.x > 7 || new_pos.y < 0 || new_pos.y > 7)
+            {
+                if (is_knight)
+                {
+                    continue;
+                }
+                break;
+            }
+
+            int check = check_new_position(new_pos, state);
+
+            if (check == 0)
+            {
+                state->player[piece_id].pos = new_pos;
+
+                if (find_one_move_capture(state, enemy_king, &result->moves[1]))
+                {
+                    result->min_steps_to_checkmate = 2;
+                    result->moves[0].start = original_pos;
+                    result->moves[0].end = new_pos;
+                    state->player[piece_id].pos = original_pos;
+                    return 1;
+                }
+
+                state->player[piece_id].pos = original_pos;
+            }
+            else if (check == 1)
+            {
+                if (is_knight)
+                {
+                    continue;
+                }
+                break;
+            }
+            else if (check == 2)
+            {
+                // 1-step capture is handled before calling this helper.
+            }
+        }
+    }
+
+    return 0;
 }
 
 void Check_Checkmate(GameState state, SearchResult *result) {
@@ -170,31 +266,19 @@ void Check_Checkmate(GameState state, SearchResult *result) {
     }
     
     // check 1 move capture for all pieces
-    for (int piece_id = 0; piece_id < state.player_count; piece_id++)
+    if (find_one_move_capture(&state, opponent_king.pos, &result->moves[0]))
     {
-        int check = check_piece_can_capture(state.player[piece_id], opponent_king.pos, state);
-
-        if (check == 1)
-        {
-            result->min_steps_to_checkmate = 1;
-            result->moves[0].start = state.player[piece_id].pos;
-            result->moves[0].end = opponent_king.pos;
-            return;
-        }
+        result->min_steps_to_checkmate = 1;
+        return;
     }
     
     //check 2 move capture
     for (int piece_id = 0; piece_id < state.player_count; piece_id++)
     {
-        Piece current_piece = state.player[piece_id];
-
-        // generate all possible moves for the current piece
-        // (similar logic with check_piece_can_capture, but we need to consider all possible moves instead of just checking capture)
-
-        // For each possible move, we need to create a new game state and check if it can capture the king in the next move.
-        // This involves updating the position of the current piece in the new game state and then calling check_piece_can_capture for all pieces again.
-
-        // If we find a move that leads to a capture in the next step, we update the result and return.
+        if (try_first_move_and_capture(&state, piece_id, opponent_king.pos, result))
+        {
+            return;
+        }
     }
 }
 
