@@ -71,19 +71,18 @@ BTNode* FACTOR(){
 
 BTNode* pre_parser()
 {
-int i;
-BTNode *node;
-static pos=0; // a static variable to remember the
-current position in the expr[]
-if (expr[pos]>='A' && expr[pos]<='D') // prefix = ID
-return makeNode(expr[pos++]);
-else{ // prefix = OP <prefix> <prefix>
-node = makeNode(expr[pos++]);
-node->left =
-node->right =
+    int i;
+    BTNode *node;
+    static pos=0; // a static variable to remember the current position in the expr[]
+    if (expr[pos]>='A' && expr[pos]<='D') // prefix = ID
+    return makeNode(expr[pos++]);
+    else{ // prefix = OP <prefix> <prefix>
+        node = makeNode(expr[pos++]);
+        node->left = pre_parser();
+        node->right = pre_parser();
 
-return node;
-}
+        return node;
+    }
 }
 
 
