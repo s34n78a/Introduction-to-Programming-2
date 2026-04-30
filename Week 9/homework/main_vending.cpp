@@ -1,6 +1,6 @@
 ﻿#include <iostream>
 #include <string>
-#include "function.h"
+#include "function_vending.h"
 
 int main() {
     VendingMachine vm;
