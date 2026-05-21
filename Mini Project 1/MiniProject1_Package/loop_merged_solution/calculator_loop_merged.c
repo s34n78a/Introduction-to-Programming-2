@@ -120,6 +120,10 @@ int nextMem = 12;
 char outBuf[OUTBUF];
 int  outPos = 0;
 
+// TO DO: add more function declarations for code generation, variable validation, constant folding, etc. as needed
+int findSym(const char *n);
+int addSym(const char *n);
+
 // TO DO: update parser function declarations to match new precedence hierarchy
 BTNode *unary_expr(void);
 BTNode *muldiv_expr(void);    /* replaces term() */
@@ -1077,6 +1081,7 @@ main
 int main() {
     initTable();
     // printf(">> "); // TO DO: remove this line since we will print the prompt in the main loop instead of in statement()
+    
     while (1) {
         statement();
     }
