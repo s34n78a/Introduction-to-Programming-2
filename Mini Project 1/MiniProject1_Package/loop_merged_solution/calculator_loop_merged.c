@@ -79,7 +79,7 @@ void initTable(void);
 // Get the value of a variable
 int getval(char *str);
 // Set the value of a variable
-int setval(char *str, int val);
+int setval(char *str /*, int val*/); // TO DO: setval no longer takes val param since it just adds an undefined variable to the table and returns its index
 // Make a new node according to token type and lexeme
 BTNode *makeNode(TokenSet tok, const char *lexe);
 // Free the syntax tree
@@ -120,10 +120,6 @@ int nextMem = 12;
 char outBuf[OUTBUF];
 int  outPos = 0;
 
-// TO DO: add more function declarations for code generation, variable validation, constant folding, etc. as needed
-int findSym(const char *n);
-int addSym(const char *n);
-
 // TO DO: update parser function declarations to match new precedence hierarchy
 BTNode *unary_expr(void);
 BTNode *muldiv_expr(void);    /* replaces term() */
@@ -134,67 +130,49 @@ BTNode *or_expr(void);
 BTNode *finish_from_id(BTNode *base);
 BTNode *assign_expr(void);    /* top-level expression, replaces expr() in statement */
 
-// TO DO: replace evaluateTree/printPrefix with codeGen (compile mode)
-int codeGen(BTNode *root);
-
 
 /*============================================================================================
   TO DO: Output helpers
 ============================================================================================*/
 
-void emit(const char *fmt, ...) {
-    va_list ap; 
-    char tmp[512];
-    va_start(ap, fmt); 
-    vsnprintf(tmp, sizeof(tmp), fmt, ap); 
-    va_end(ap);
-    int len = (int)strlen(tmp);
-    if (outPos + len < OUTBUF - 1) {
-        memcpy(outBuf + outPos, tmp, len);
-        outPos += len; 
-        outBuf[outPos] = '\0';
-    }
-}
-
 void emitMOV_RC(int d,int c) { // TO DO: move constant c to register d
-    emit("MOV r%d %d\n",d,c);
+    outPos += sprintf(outBuf+outPos, "MOV r%d %d\n", d, c);
 }
 
 void emitMOV_RM(int d,int a) { // TO DO: move from memory address a to register d
-    emit("MOV r%d [%d]\n",d,a);
+    outPos += sprintf(outBuf+outPos, "MOV r%d [%d]\n", d, a);
 }
 
 void emitMOV_MR(int a,int s) { // TO DO: move from register s to memory address a
-    emit("MOV [%d] r%d\n",a,s);
+    outPos += sprintf(outBuf+outPos, "MOV [%d] r%d\n", a,s);
 }
 
 void emitADD(int d,int s) { // TO DO: add register s to register d, result in d
-    emit("ADD r%d r%d\n",d,s);
+    outPos += sprintf(outBuf+outPos, "ADD r%d r%d\n", d ,s);
 }
 
 void emitSUB(int d,int s) { // TO DO: subtract register s from register d, result in d
-    emit("SUB r%d r%d\n",d,s);
+    outPos += sprintf(outBuf+outPos, "SUB r%d r%d\n", d ,s);
 }
 
 void emitMUL(int d,int s) { // TO DO: multiply register d by register s, result in d
-    emit("MUL r%d r%d\n",d,s);
+    outPos += sprintf(outBuf+outPos, "MUL r%d r%d\n", d ,s);
 }
 
 void emitDIV(int d,int s) { // TO DO: divide register d by register s, result in d
-    emit("DIV r%d r%d\n",d,s);
+    outPos += sprintf(outBuf+outPos, "DIV r%d r%d\n", d ,s);
 }
 
 void emitAND(int d,int s) { // TO DO: bitwise AND register d with register s, result in d
-    emit("AND r%d r%d\n",d,s);
+    outPos += sprintf(outBuf+outPos, "AND r%d r%d\n", d ,s);
 }
 
 void emitOR (int d,int s) { // TO DO: bitwise OR register d with register s, result in d 
-    emit("OR r%d r%d\n",d,s);
+    outPos += sprintf(outBuf+outPos, "OR r%d r%d\n", d ,s);
 }
 
 void emitXOR(int d,int s) { // TO DO: bitwise XOR register d with register s, result in d
-    emit("XOR r%d r%d\n",d,s);}
-
+    outPos += sprintf(outBuf+outPos, "XOR r%d r%d\n", d ,s);}
 
 /*============================================================================================
   TO DO: Register allocator
@@ -321,12 +299,12 @@ int validateVars(BTNode *r) {// returns 1 if any variable is used before being d
         {
             return 1;
         }
-        idx = findSym(lhs->lexeme);
+        idx = getval(lhs->lexeme);
         if (idx < 0) // new variable on LHS — add to symbol table as undefined (will be marked defined in validateVars pass)
         {
-            idx = addSym(lhs->lexeme);
+            idx = setval(lhs->lexeme);
         }
-        if (idx < 0) /* addSym failed (e.g. out of memory) */
+        if (idx < 0) /* setval failed (e.g. out of memory) */
         {
             return 1;
         }
@@ -340,7 +318,7 @@ int validateVars(BTNode *r) {// returns 1 if any variable is used before being d
         {
             return 1;
         }
-        idx = findSym(lhs->lexeme);
+        idx = getval(lhs->lexeme);
         if (idx < 0 || !table[idx].defined)
         {
             return 1;
@@ -348,7 +326,7 @@ int validateVars(BTNode *r) {// returns 1 if any variable is used before being d
         return validateVars(r->right);
     }
     if (r->data == ID) {
-        idx = findSym(r->lexeme);
+        idx = getval(r->lexeme);
         if (idx < 0 || !table[idx].defined)
         {
             return 1;
@@ -361,7 +339,7 @@ int validateVars(BTNode *r) {// returns 1 if any variable is used before being d
         {
             return 1;
         }
-        idx = findSym(id->lexeme);
+        idx = getval(id->lexeme);
         if (idx < 0 || !table[idx].defined)
         {
             return 1;
@@ -508,60 +486,46 @@ void initTable(void) {
     nextMem = 12; // TO DO: set nextMem to the next available memory address for new variables
 }
 
-/* int getval(char *str) {
+int getval(char *str) {
     int i = 0;
 
     for (i = 0; i < sbcount; i++)
-        if (strcmp(str, table[i].name) == 0)
-            return table[i].val;
+        if (strcmp(str, table[i].name) == 0) {
+            return i; // TO DO: returns table index of str, or -1 if not found ---> return table[i].val;
+        }
+    return -1; /* Return index in table, or -1 if not found.*/
 
-    if (sbcount >= TBLSIZE)
+    /* if (sbcount >= TBLSIZE)
         error(RUNOUT);
     
     strcpy(table[sbcount].name, str);
     table[sbcount].val = 0;
     sbcount++;
-    return 0;
-}*/
-
-int findSym(const char *n){ // TO DO: Replace getVal with findSym
-    for (int i = 0; i < sbcount; i++) {
-        if (strcmp(table[i].name, n) == 0) {
-            return i;
-        }
-    }
-    return -1; /* Return index in table, or -1 if not found.*/
+    return 0;*/
 }
 
-/* int setval(char *str, int val) {
-    int i = 0;
+int setval(char *str /*, int val*/) {
+    /*int i = 0;
 
     for (i = 0; i < sbcount; i++) {
         if (strcmp(str, table[i].name) == 0) {
             table[i].val = val;
             return val;
         }
-    }
+    }*/
 
     if (sbcount >= TBLSIZE)
         error(RUNOUT);
     
     strcpy(table[sbcount].name, str);
-    table[sbcount].val = val;
-    sbcount++;
-    return val;
-}*/
-
-int addSym(const char *n){ // TO DO: Replace setVal with addSym (also adds to symbol table with defined=0 and memAddr=nextMem, then increments nextMem by 4)
-    if (sbcount >= TBLSIZE) {
-        error(RUNOUT);
-        return -1;
-    }
-    strcpy(table[sbcount].name,n); 
-    table[sbcount].memAddr=nextMem;
-    table[sbcount].defined=0; 
-    nextMem+=4; 
-    return sbcount++;
+    // table[sbcount].val = val;
+    table[sbcount].memAddr = nextMem; // TO DO: assign memory address for new variable
+    table[sbcount].defined = 0; // Mark new variable as undefined until it's assigned in validateVars
+    nextMem += 4; // TO DO: increment nextMem for the next variable
+    return sbcount++; // TO DO: return index in table instead of value
+    
+    /* sbcount++;
+    return val;*/
 }
 
 BTNode *makeNode(TokenSet tok, const char *lexe) {
@@ -844,8 +808,6 @@ BTNode *assign_expr(void) { // TODO: assign_expr — top-level rule; peek past I
     return or_expr();
 }
 
-
-
 // statement := ENDFILE | END | expr END
 void statement(void) {
     BTNode *retp = NULL;
@@ -855,7 +817,7 @@ void statement(void) {
         emitMOV_RM(0, 0); 
         emitMOV_RM(1, 4); 
         emitMOV_RM(2, 8);
-        emit("EXIT 0\n");
+        outPos += sprintf(outBuf+outPos, "EXIT 0\n");
         printf("%s", outBuf);
 
         exit(0);
@@ -882,7 +844,7 @@ void statement(void) {
                 err(DIVZERO);
             }
             memset(regUsed, 0, sizeof(regUsed));
-            resultReg = codeGen(retp);
+            resultReg = evaluateTree(retp);
             freeReg(resultReg);
 
             freeTree(retp);
@@ -932,37 +894,97 @@ void err(ErrorType errorNum) {
 /*============================================================================================
 codeGen implementation
 ============================================================================================*/
-/* // Replaced by codeGen
+
 int evaluateTree(BTNode *root) {
     int retval = 0, lv = 0, rv = 0;
 
     if (root != NULL) {
         switch (root->data) {
             case ID:
-                retval = getval(root->lexeme);
+                retval = allocReg(); // TODO: Replace retval ---> retval = getval(root->lexeme);with the register number
+                emitMOV_RM(retval, table[getval(root->lexeme)].memAddr); // TO DO: emit MOV to load into register
+                
                 break;
             case INT:
-                retval = atoi(root->lexeme);
+                retval = allocReg(); // TO DO: Replace retval --> retval = atoi(root->lexeme); with the register number 
+                emitMOV_RC(retval, atoi(root->lexeme)); // TO DO: emit MOV to load the integer constant into the register
+
                 break;
+            
+            case INCDEC: // TODO: INCDEC — load variable, add/sub 1, write back, return updated reg
+                retval = allocReg();
+                emitMOV_RM(retval, table[getval(root->left->lexeme)].memAddr);
+                rv = allocReg();
+                emitMOV_RC(rv, 1);
+                if (root->lexeme[0] == '+') 
+                {
+                    emitADD(retval, rv);
+                }
+                else                        
+                {
+                    emitSUB(retval, rv);
+                }
+                freeReg(rv);
+                emitMOV_MR(table[getval(root->left->lexeme)].memAddr, retval);
+                break;
+
             case ASSIGN:
                 rv = evaluateTree(root->right);
-                retval = setval(root->left->lexeme, rv);
+                
+                emitMOV_MR(table[getval(root->left->lexeme)].memAddr, rv); // TODO: generate RHS, store result into LHS memory address and replace --> retval = setval(root->left->lexeme, rv);
+                retval = rv;  // return rv so chained assigns (x = y = 3) work
+                
                 break;
+            
+            case ADDSUB_ASSIGN: // TODO: ADDSUB_ASSIGN similar to INCDEC — load LHS, compute RHS, add/sub, write back
+                lv = allocReg();
+                emitMOV_RM(lv, table[getval(root->left->lexeme)].memAddr);
+                rv = evaluateTree(root->right);
+                if (strcmp(root->lexeme, "+=") == 0) 
+                {
+                    emitADD(lv, rv);
+                }
+                else                        
+                {
+                    emitSUB(lv, rv);
+                }
+                freeReg(rv);
+                emitMOV_MR(table[getval(root->left->lexeme)].memAddr, lv);
+                retval = lv;
+                break;
+
             case ADDSUB:
             case MULDIV:
+            
+            case AND:// TODO: add AND, OR, XOR — same structure as ADDSUB/MULDIV
+            case OR:
+            case XOR:
                 lv = evaluateTree(root->left);
                 rv = evaluateTree(root->right);
                 if (strcmp(root->lexeme, "+") == 0) {
-                    retval = lv + rv;
+                    emitADD(lv, rv); // TO DO: emit instead of compute ---> retval = lv + rv;
                 } else if (strcmp(root->lexeme, "-") == 0) {
-                    retval = lv - rv;
+                    emitSUB(lv, rv); // TO DO: emit instead of compute ---> retval = lv - rv;
                 } else if (strcmp(root->lexeme, "*") == 0) {
-                    retval = lv * rv;
+                    emitMUL(lv, rv); // TO DO: emit instead of compute ---> retval = lv * rv;
                 } else if (strcmp(root->lexeme, "/") == 0) {
-                    if (rv == 0)
+                    emitDIV(lv, rv); // TO DO: emit instead of compute --->
+                    /*if (rv == 0)
                         error(DIVZERO);
-                    retval = lv / rv;
+                    retval = lv / rv;*/
+                } 
+
+                // TO DO: handle AND, OR, XOR with emit and set retval to the correct register
+                else if (strcmp(root->lexeme, "&") == 0) {
+                    emitAND(lv, rv);
+                } else if (strcmp(root->lexeme, "|") == 0) {
+                    emitOR(lv, rv);
+                } else if (strcmp(root->lexeme, "^") == 0) {
+                    emitXOR(lv, rv);
                 }
+                freeReg(rv);  // free RHS register, result lives in lv
+                retval = lv; // result is now in lv, so set retval to lv to return the correct register number
+
                 break;
             default:
                 retval = 0;
@@ -970,109 +992,14 @@ int evaluateTree(BTNode *root) {
     }
     return retval;
 }
-void printPrefix(BTNode *root) {
+
+/*void printPrefix(BTNode *root) {
     if (root != NULL) {
         printf("%s ", root->lexeme);
         printPrefix(root->left);
         printPrefix(root->right);
     }
-}
-*/
-
-int codeGen(BTNode *root) { // TODO: replaces evaluateTree; emits assembly and returns result register
-    int r, lReg, rReg, idx, one;
-    BTNode *lhs, *id;
-    if (!root)
-    {
-        return 0;
-    }
-    switch (root->data) {
-    case INT:
-        r = allocReg(); 
-        emitMOV_RC(r, atoi(root->lexeme)); 
-        return r;
-    case ID:
-        idx = findSym(root->lexeme);
-        r = allocReg(); 
-        emitMOV_RM(r, table[idx].memAddr); 
-        return r;
-    case INCDEC: // TODO: load, add/sub 1, write back, return new value
-        id = root->left; 
-        idx = findSym(id->lexeme);
-        r = allocReg(); 
-        emitMOV_RM(r, table[idx].memAddr);
-        one = allocReg(); 
-        emitMOV_RC(one, 1);
-        if (root->lexeme[0] == '+')
-        { 
-            emitADD(r, one);
-        } 
-        else 
-        {
-            emitSUB(r, one);
-        }
-        freeReg(one); 
-        emitMOV_MR(table[idx].memAddr, r); 
-        return r;
-    case ASSIGN: // TODO: generate RHS, store into LHS memory address, return RHS reg
-        lhs = root->left; 
-        idx = findSym(lhs->lexeme);
-        rReg = codeGen(root->right);
-        emitMOV_MR(table[idx].memAddr, rReg);
-        return rReg;
-    case ADDSUB_ASSIGN: // TODO: load LHS, compute RHS, add/sub, write back
-        lhs = root->left; idx = findSym(lhs->lexeme);
-        lReg = allocReg(); emitMOV_RM(lReg, table[idx].memAddr);
-        rReg = codeGen(root->right);
-        if (root->lexeme[0] == '+') emitADD(lReg, rReg); else emitSUB(lReg, rReg);
-        freeReg(rReg); emitMOV_MR(table[idx].memAddr, lReg); return lReg;
-    case ADDSUB: 
-    case MULDIV: 
-    case AND: 
-    case OR: 
-    case XOR: // TODO: binary ops — generate both sides, emit op, free RHS register
-        lReg = codeGen(root->left);
-        rReg = codeGen(root->right);
-        switch (root->data) {
-            case ADDSUB: 
-                if (root->lexeme[0]=='+') 
-                {
-                    emitADD(lReg,rReg);
-                }
-                else 
-                {
-                    emitSUB(lReg,rReg);
-                } 
-                break;
-            case MULDIV: 
-                if (root->lexeme[0]=='*') 
-                {
-                    emitMUL(lReg,rReg);
-                }
-                else 
-                {
-                    emitDIV(lReg,rReg);
-                } 
-                break;
-            case AND: 
-                emitAND(lReg, rReg); 
-                break;
-            case OR:  
-                emitOR (lReg, rReg); 
-                break;
-            case XOR: 
-                emitXOR(lReg, rReg); 
-                break;
-            default: 
-                break;
-        }
-        freeReg(rReg); 
-        return lReg;
-    default: 
-        return 0;
-    }
-}
-
+}*/
 
 /*============================================================================================
 main
@@ -1081,7 +1008,6 @@ main
 int main() {
     initTable();
     // printf(">> "); // TO DO: remove this line since we will print the prompt in the main loop instead of in statement()
-    
     while (1) {
         statement();
     }
