@@ -360,11 +360,13 @@ static void drainLine(void) {
     while (!match(END) && !match(ENDFILE)) advance();
     if (match(END)) advance();
 }
+
 void err(ErrorType errorNum) {
     (void)errorNum;
     drainLine();
     hasError = 1;
 }
+
 // factor := INT | ID | INCDEC ID | LPAREN assign_expr RPAREN
 // TO DO: factor no longer handles ADDSUB (moved to unary_expr) or ASSIGN (moved to assign_expr)
 BTNode *factor(void) {

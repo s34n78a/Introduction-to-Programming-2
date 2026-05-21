@@ -422,12 +422,9 @@ static BTNode *or_expr(void) {
                | ID ADDSUB_ASSIGN assign_expr
                | or_expr
 
-  We need look-ahead: if current token is ID and next is ASSIGN/ADDSUB_ASSIGN
-  we take the assignment branch; otherwise fall through to or_expr.
+  We need look-ahead: if current token is ID and next is ASSIGN/ADDSUB_ASSIGN we take the assignment branch; otherwise fall through to or_expr.
 
-  Because our lexer is one-token, we peek by remembering that match(ID) is true
-  and we already have the lexeme.  We call advance() to get the next token and
-  check it.
+  Because our lexer is one-token, we peek by remembering that match(ID) is true and we already have the lexeme. We call advance() to get the next token and check it.
 */
 static BTNode *assign_expr(void) {
     if (hasError) return makeNode(INT,"0");

@@ -300,8 +300,13 @@ BTNode *factor(void) {
         return retp;
     // TODO: handle INCDEC ID (e.g. ++x or --x)
     } else if (match(INCDEC)) {
-        char op[MAXLEN]; strcpy(op, getLexeme()); advance();
-        if (!match(ID)) { error(NOTNUMID); }
+        char op[MAXLEN]; 
+        strcpy(op, getLexeme()); 
+        advance();
+        if (!match(ID)) 
+        { 
+            error(NOTNUMID); 
+        }
         retp = makeNode(INCDEC, op);
         retp->left = makeNode(ID, getLexeme());
         advance();
@@ -310,8 +315,10 @@ BTNode *factor(void) {
         advance();
         // TODO: recurse into assign_expr instead of expr
         retp = assign_expr();
-        if (match(RPAREN)) advance();
-        else error(MISPAREN);
+        if (match(RPAREN)) 
+            advance();
+        else 
+            error(MISPAREN);
         return retp;
     } else {
         error(NOTNUMID);

@@ -216,28 +216,155 @@ void freeReg(int r) {
 
 
 /*============================================================================================
-  TO DO: Symbol table
+  TO DO: Variable validation and constant folding helpers
 ============================================================================================*/
-// for parser iniTable, getval (jadi findSym), setval (jadi addSym), makeNode, freeTree
-int findSym(const char *n){ /* Return index in table, or -1 if not found.*/
-    for (int i = 0; i < sbcount; i++) {
-        if (strcmp(table[i].name, n) == 0) {
-            return i;
-        }
-    }
-    return -1;
+
+int hasVariable(BTNode *r) { // returns 1 if the subtree contains any ID node
+    if (!r) return 0;
+    if (r->data == ID) return 1;
+    return hasVariable(r->left) || hasVariable(r->right);
 }
 
-int addSym(const char *n){
-    if (sbcount >= TBLSIZE) {
-        error(RUNOUT);
-        return -1;
+int constEval(BTNode *r, int *res) { // statically evaluates a constant-only subtree then returns 1 and sets *res on success, 0 if tree has variables or hits div-by-zero
+    int lv, rv;
+    if (!r)
+    { 
+        *res = 0; 
+        return 1; 
     }
-    strcpy(table[sbcount].name,n); 
-    table[sbcount].memAddr=nextMem;
-    table[sbcount].defined=0; 
-    nextMem+=4; 
-    return sbcount++;
+    if (r->data == INT) 
+    { 
+        *res = atoi(r->lexeme); 
+        return 1; 
+    }
+    if (r->data == ID || r->data == INCDEC) 
+    {
+        return 0;
+    }
+    if (!constEval(r->left,  &lv)) 
+    {
+        return 0;
+    }
+    if (!constEval(r->right, &rv)) 
+    {
+        return 0;
+    }
+    switch (r->data) {
+        case ADDSUB: 
+            if (r->lexeme[0] == '+')
+            {
+                *res = lv + rv;
+            }
+            else
+            {
+                *res = lv - rv;
+            }
+            return 1;
+        case MULDIV:
+            if (r->lexeme[0] == '*') 
+            { 
+                *res = lv * rv; 
+                return 1; 
+            }
+            if (rv == 0)
+            {
+                return 0; // div by zero
+            }
+            *res = lv / rv; 
+            return 1;
+        case AND: 
+            *res = lv & rv; 
+            return 1;
+        case OR:  
+            *res = lv | rv; 
+            return 1;
+        case XOR: 
+            *res = lv ^ rv; 
+            return 1;
+        default: 
+            return 0;
+    }
+}
+
+int validateDiv(BTNode *r) {// returns 1 if any division by constant zero is found
+    int val;
+    if (!r) 
+    {
+        return 0;
+    }
+    if (r->data == MULDIV && r->lexeme[0] == '/') 
+    {
+        if (!hasVariable(r->right)) /* If RHS has no variable, constant-eval it */
+        {
+            if (!constEval(r->right, &val) || val == 0) /* constEval failed: means nested div by zero in RHS */
+            {
+                return 1;
+            }
+        }
+    }
+    return validateDiv(r->left) || validateDiv(r->right);
+}
+
+int validateVars(BTNode *r) {// returns 1 if any variable is used before being defined
+    int idx;
+    if (!r)
+    {
+        return 0;
+    }
+    if (r->data == ASSIGN) {
+        BTNode *lhs = r->left;
+        if (!lhs || lhs->data != ID) // the left side of an assignment must be an ID
+        {
+            return 1;
+        }
+        idx = findSym(lhs->lexeme);
+        if (idx < 0) // new variable on LHS — add to symbol table as undefined (will be marked defined in validateVars pass)
+        {
+            idx = addSym(lhs->lexeme);
+        }
+        if (idx < 0) /* addSym failed (e.g. out of memory) */
+        {
+            return 1;
+        }
+        
+        table[idx].defined = 1;
+        return validateVars(r->right);
+    }
+    if (r->data == ADDSUB_ASSIGN) {
+        BTNode *lhs = r->left;
+        if (!lhs || lhs->data != ID)
+        {
+            return 1;
+        }
+        idx = findSym(lhs->lexeme);
+        if (idx < 0 || !table[idx].defined)
+        {
+            return 1;
+        }
+        return validateVars(r->right);
+    }
+    if (r->data == ID) {
+        idx = findSym(r->lexeme);
+        if (idx < 0 || !table[idx].defined)
+        {
+            return 1;
+        }
+        return 0;
+    }
+    if (r->data == INCDEC) {
+        BTNode *id = r->left;
+        if (!id || id->data != ID)
+        {
+            return 1;
+        }
+        idx = findSym(id->lexeme);
+        if (idx < 0 || !table[idx].defined)
+        {
+            return 1;
+        }
+        return 0;
+    }
+    return validateVars(r->left) || validateVars(r->right);
 }
 
 
@@ -376,8 +503,8 @@ void initTable(void) {
     sbcount = 3;
     nextMem = 12; // TO DO: set nextMem to the next available memory address for new variables
 }
-/* // Replaced by findSym and addSym
-int getval(char *str) {
+
+/* int getval(char *str) {
     int i = 0;
 
     for (i = 0; i < sbcount; i++)
@@ -391,9 +518,18 @@ int getval(char *str) {
     table[sbcount].val = 0;
     sbcount++;
     return 0;
+}*/
+
+int findSym(const char *n){ // TO DO: Replace getVal with findSym
+    for (int i = 0; i < sbcount; i++) {
+        if (strcmp(table[i].name, n) == 0) {
+            return i;
+        }
+    }
+    return -1; /* Return index in table, or -1 if not found.*/
 }
 
-int setval(char *str, int val) {
+/* int setval(char *str, int val) {
     int i = 0;
 
     for (i = 0; i < sbcount; i++) {
@@ -410,8 +546,20 @@ int setval(char *str, int val) {
     table[sbcount].val = val;
     sbcount++;
     return val;
+}*/
+
+int addSym(const char *n){ // TO DO: Replace setVal with addSym (also adds to symbol table with defined=0 and memAddr=nextMem, then increments nextMem by 4)
+    if (sbcount >= TBLSIZE) {
+        error(RUNOUT);
+        return -1;
+    }
+    strcpy(table[sbcount].name,n); 
+    table[sbcount].memAddr=nextMem;
+    table[sbcount].defined=0; 
+    nextMem+=4; 
+    return sbcount++;
 }
-*/
+
 BTNode *makeNode(TokenSet tok, const char *lexe) {
     BTNode *node = (BTNode*)malloc(sizeof(BTNode));
     strcpy(node->lexeme, lexe);
@@ -430,29 +578,23 @@ void freeTree(BTNode *root) {
     }
 }
 
-// factor := INT | ADDSUB INT |
-//		   	 ID  | ADDSUB ID  | 
-//		   	 ID ASSIGN expr |
-//		   	 LPAREN expr RPAREN |
-//		   	 ADDSUB LPAREN expr RPAREN
+// factor := INT | ADDSUB INT | ID  | ADDSUB ID | ID ASSIGN expr | LPAREN expr RPAREN | ADDSUB LPAREN expr RPAREN
 BTNode *factor(void) {
-    BTNode *retp = NULL, *left = NULL;
+    BTNode *retp = NULL /*, *left = NULL*/;
 
     if (match(INT)) {
         retp = makeNode(INT, getLexeme());
         advance();
+        return retp; // TO DO: early return for simple cases like INT and ID to avoid unnecessary nesting
     } else if (match(ID)) {
-        left = makeNode(ID, getLexeme());
+        retp /*left*/ = makeNode(ID, getLexeme());
         advance();
-        if (!match(ASSIGN)) {
-            retp = left;
-        } else {
-            retp = makeNode(ASSIGN, getLexeme());
-            advance();
-            retp->left = left;
-            retp->right = expr();
-        }
-    } else if (match(ADDSUB)) {
+        /* if (!match(ASSIGN)) { retp = left; } 
+        else { retp = makeNode(ASSIGN, getLexeme());
+            advance(); retp->left = left; retp->right = expr();}*/
+        return retp;// TO DO: handle ID ASSIGN expr (e.g. x = 3 or y = x + 2)
+    } 
+    /*else if (match(ADDSUB)) {
         retp = makeNode(ADDSUB, getLexeme());
         retp->left = makeNode(INT, "0");
         advance();
@@ -472,20 +614,38 @@ BTNode *factor(void) {
         } else {
             error(NOTNUMID);
         }
-    } else if (match(LPAREN)) {
+    } */
+    // TO DO: handle INCDEC ID (e.g. ++x or --x) and parenthesized expressions (LPAREN expr RPAREN), also with optional leading ADDSUB for unary plus/minus
+    else if (match(INCDEC)) {
+        char op[MAXLEN]; 
+        strcpy(op, getLexeme()); 
         advance();
-        retp = expr();
+        if (!match(ID)) 
+        { 
+            error(NOTNUMID); 
+        }
+        retp = makeNode(INCDEC, op);
+        retp->left = makeNode(ID, getLexeme());
+        advance();
+        return retp;
+    }
+
+    else if (match(LPAREN)) {
+        advance();
+        retp = assign_expr(); // TODO: recurse into assign_expr instead of expr ---> retp = expr();
         if (match(RPAREN))
             advance();
         else
             error(MISPAREN);
+        return retp; // TO DO: early return for parenthesized expr to avoid unnecessary nesting
     } else {
         error(NOTNUMID);
+        return makeNode(INT, "0"); // TO DO: Return a dummy node to avoid null pointer issues in the caller; this node will be ignored since hasError is set
     }
-    return retp;
+    // return retp;
 }
 
-// term      := factor term_tail
+/* term      := factor term_tail
 // term_tail := MULDIV factor term_tail | NiL
 BTNode *term(void) {
     BTNode *retp = NULL, *left = NULL;
@@ -515,69 +675,214 @@ BTNode *expr(void) {
         left = retp;
     }
     return retp;
-}
+} // Replace with full grammar */
 
-/* Recursion Version
-BTNode *term(void) {
-    BTNode *node = factor();
-    return term_tail(node);
-}
 
-// term_tail := MULDIV factor term_tail | NiL
-BTNode *term_tail(BTNode *left) {
-    BTNode *node = NULL;
+/*============================================================================================
+  TO DO: Full grammar implementation
+============================================================================================*/
+//       New call chain: assign_expr -> or_expr -> xor_expr -> and_expr -> addsub_expr -> muldiv_expr -> unary_expr -> factor
 
-    if (match(MULDIV)) {
-        node = makeNode(MULDIV, getLexeme());
-        advance();
-        node->left = left;
-        node->right = factor();
-        return term_tail(node);
-    } else {
-        return left;
-    }
-}
-
-// expr := term expr_tail
-BTNode *expr(void) {
-    BTNode *node = term();
-    return expr_tail(node);
-}
-
-// expr_tail := ADDSUB term expr_tail | NiL
-BTNode *expr_tail(BTNode *left) {
-    BTNode *node = NULL;
-
+// unary_expr := ADDSUB unary_expr | factor
+BTNode *unary_expr(void) { // TODO: unary_expr — handles unary +/- as prefix (builds 0 - x style node)
+    BTNode *node;
     if (match(ADDSUB)) {
-        node = makeNode(ADDSUB, getLexeme());
+        char op[MAXLEN]; strcpy(op, getLexeme());
+        node = makeNode(ADDSUB, op);
+        node->left = makeNode(INT, "0");
         advance();
-        node->left = left;
-        node->right = term();
-        return expr_tail(node);
-    } else {
-        return left;
+        node->right = unary_expr();
+        return node;
     }
+    return factor();
 }
-*/
+// muldiv_expr := unary_expr muldiv_expr_tail
+// muldiv_expr_tail := MULDIV unary_expr muldiv_expr_tail | NiL
+BTNode *muldiv_expr(void) { // TODO: muldiv_expr — same structure as old term(), but calls unary_expr
+    BTNode *left, *node;
+    left = unary_expr();
+    while (match(MULDIV)) {
+        node = makeNode(MULDIV, getLexeme()); 
+        advance();
+        node->left = left; 
+        node->right = unary_expr(); 
+        left = node;
+    }
+    return left;
+}
+
+// addsub_expr := muldiv_expr addsub_expr_tail
+// addsub_expr_tail := ADDSUB muldiv_expr addsub_expr_tail | NiL
+BTNode *addsub_expr(void) { // TODO: addsub_expr — same structure as old expr(), but calls muldiv_expr
+    BTNode *left, *node;
+    left = muldiv_expr();
+    while (match(ADDSUB)) {
+        node = makeNode(ADDSUB, getLexeme()); 
+        advance();
+        node->left = left; 
+        node->right = muldiv_expr(); 
+        left = node;
+    }
+    return left;
+}
+
+// and_expr := addsub_expr and_expr_tail
+// and_expr_tail := AND addsub_expr and_expr_tail | NiL
+BTNode *and_expr(void) { // TODO: and_expr — new precedence level for &
+    BTNode *left, *node;
+    left = addsub_expr();
+    while (match(AND)) {
+        node = makeNode(AND, "&"); 
+        advance();
+        node->left = left; 
+        node->right = addsub_expr(); 
+        left = node;
+    }
+    return left;
+}
+
+// xor_expr := and_expr xor_expr_tail
+// xor_expr_tail := XOR and_expr xor_expr_tail | NiL
+BTNode *xor_expr(void) { // TODO: xor_expr — new precedence level for ^
+    BTNode *left, *node;
+    left = and_expr();
+    while (match(XOR)) {
+        node = makeNode(XOR, "^"); 
+        advance();
+        node->left = left; 
+        node->right = and_expr(); 
+        left = node;
+    }
+    return left;
+}
+
+// or_expr := xor_expr or_expr_tail
+// or_expr_tail := OR xor_expr or_expr_tail | NiL
+BTNode *or_expr(void) { // TODO: or_expr — new precedence level for |
+    BTNode *left, *node;
+    left = xor_expr();
+    while (match(OR)) {
+        node = makeNode(OR, "|"); 
+        advance();
+        node->left = left; 
+        node->right = xor_expr(); 
+        left = node;
+    }
+    return left;
+}
+
+//       consumed an ID and found it is NOT followed by = or +=/-=
+BTNode *finish_from_id(BTNode *base) { // TODO: finish_from_id — re-enters the full binary-op chain when we have already
+    BTNode *left = base, *node;
+    while (match(MULDIV)) {
+        node = makeNode(MULDIV, getLexeme()); 
+        advance();
+        node->left = left; 
+        node->right = unary_expr(); 
+        left = node;
+    }
+    while (match(ADDSUB)) {
+        node = makeNode(ADDSUB, getLexeme()); 
+        advance();
+        node->left = left; 
+        node->right = muldiv_expr(); 
+        left = node;
+    }
+    while (match(AND)) {
+        node = makeNode(AND, "&"); 
+        advance();
+        node->left = left; 
+        node->right = addsub_expr(); 
+        left = node;
+    }
+    while (match(XOR)) {
+        node = makeNode(XOR, "^"); 
+        advance();
+        node->left = left; 
+        node->right = and_expr(); 
+        left = node;
+    }
+    while (match(OR)) {
+        node = makeNode(OR, "|"); 
+        advance();
+        node->left = left; 
+        node->right = xor_expr(); 
+        left = node;
+    }
+    return left;
+}
+
+// assign_expr := ID ASSIGN assign_expr | ID ADDSUB_ASSIGN assign_expr | or_expr
+BTNode *assign_expr(void) { // TODO: assign_expr — top-level rule; peek past ID to detect = or +=/-=
+    BTNode *node, *lhs;
+    char savedLex[MAXLEN], oplex[MAXLEN];
+    if (match(ID)) { // We need look-ahead: if current token is ID and next is ASSIGN/ADDSUB_ASSIGN we take the assignment branch; otherwise fall through to or_expr.
+        strcpy(savedLex, getLexeme()); 
+        advance(); // Because our lexer is one-token, we peek by remembering that match(ID) is true and we already have the lexeme. We call advance() to get the next token and check it.
+        if (match(ASSIGN)) {
+            lhs = makeNode(ID, savedLex); 
+            node = makeNode(ASSIGN, "=");
+            advance(); 
+            node->left = lhs; 
+            node->right = assign_expr(); 
+            return node;
+        }
+        if (match(ADDSUB_ASSIGN)) {
+            strcpy(oplex, getLexeme());
+            lhs = makeNode(ID, savedLex); 
+            node = makeNode(ADDSUB_ASSIGN, oplex);
+            advance(); node->left = lhs; 
+            node->right = assign_expr(); 
+            return node;
+        }
+        return finish_from_id(makeNode(ID, savedLex));
+    }
+    return or_expr();
+}
+
+
 
 // statement := ENDFILE | END | expr END
 void statement(void) {
     BTNode *retp = NULL;
-
+    int resultReg; // TO DO: register to hold the result of evaluating the expression for printing
     if (match(ENDFILE)) {
+        memset(regUsed, 0, sizeof(regUsed)); // TODO: store final x,y,z into r0,r1,r2 then print buffered output
+        emitMOV_RM(0, 0); 
+        emitMOV_RM(1, 4); 
+        emitMOV_RM(2, 8);
+        emit("EXIT 0\n");
+        printf("%s", outBuf);
+
         exit(0);
     } else if (match(END)) {
-        printf(">> ");
+        // printf(">> "); // TO DO: delete this line since we will print the prompt in main loop instead of here, to avoid printing an extra prompt after the last statement
         advance();
     } else {
-        retp = expr();
+        memset(regUsed, 0, sizeof(regUsed)); // TODO: reset register allocator for each new statement
+        retp = assign_expr(); // TODO: call assign_expr instead of expr ---> retp = expr();
+
         if (match(END)) {
-            printf("%d\n", evaluateTree(retp));
+            /*printf("%d\n", evaluateTree(retp));
             printf("Prefix traversal: ");
             printPrefix(retp);
-            printf("\n");
+            printf("\n");*/
+
+            // TODO: validate then generate code instead of evaluating
+            if (validateVars(retp)) 
+            {
+                err(NOTFOUND);
+            }
+            if (validateDiv(retp))  
+            {
+                err(DIVZERO);
+            }
+            memset(regUsed, 0, sizeof(regUsed));
+            resultReg = codeGen(retp);
+            freeReg(resultReg);
+
             freeTree(retp);
-            printf(">> ");
+            // printf(">> "); // TO DO: delete this line since we will print the prompt in main loop instead of here, to avoid printing an extra prompt after the last statement
             advance();
         } else {
             error(SYNTAXERR);
@@ -661,12 +966,106 @@ int evaluateTree(BTNode *root) {
     }
     return retval;
 }
-*/
 void printPrefix(BTNode *root) {
     if (root != NULL) {
         printf("%s ", root->lexeme);
         printPrefix(root->left);
         printPrefix(root->right);
+    }
+}
+*/
+
+int codeGen(BTNode *root) { // TODO: replaces evaluateTree; emits assembly and returns result register
+    int r, lReg, rReg, idx, one;
+    BTNode *lhs, *id;
+    if (!root)
+    {
+        return 0;
+    }
+    switch (root->data) {
+    case INT:
+        r = allocReg(); 
+        emitMOV_RC(r, atoi(root->lexeme)); 
+        return r;
+    case ID:
+        idx = findSym(root->lexeme);
+        r = allocReg(); 
+        emitMOV_RM(r, table[idx].memAddr); 
+        return r;
+    case INCDEC: // TODO: load, add/sub 1, write back, return new value
+        id = root->left; 
+        idx = findSym(id->lexeme);
+        r = allocReg(); 
+        emitMOV_RM(r, table[idx].memAddr);
+        one = allocReg(); 
+        emitMOV_RC(one, 1);
+        if (root->lexeme[0] == '+')
+        { 
+            emitADD(r, one);
+        } 
+        else 
+        {
+            emitSUB(r, one);
+        }
+        freeReg(one); 
+        emitMOV_MR(table[idx].memAddr, r); 
+        return r;
+    case ASSIGN: // TODO: generate RHS, store into LHS memory address, return RHS reg
+        lhs = root->left; 
+        idx = findSym(lhs->lexeme);
+        rReg = codeGen(root->right);
+        emitMOV_MR(table[idx].memAddr, rReg);
+        return rReg;
+    case ADDSUB_ASSIGN: // TODO: load LHS, compute RHS, add/sub, write back
+        lhs = root->left; idx = findSym(lhs->lexeme);
+        lReg = allocReg(); emitMOV_RM(lReg, table[idx].memAddr);
+        rReg = codeGen(root->right);
+        if (root->lexeme[0] == '+') emitADD(lReg, rReg); else emitSUB(lReg, rReg);
+        freeReg(rReg); emitMOV_MR(table[idx].memAddr, lReg); return lReg;
+    case ADDSUB: 
+    case MULDIV: 
+    case AND: 
+    case OR: 
+    case XOR: // TODO: binary ops — generate both sides, emit op, free RHS register
+        lReg = codeGen(root->left);
+        rReg = codeGen(root->right);
+        switch (root->data) {
+            case ADDSUB: 
+                if (root->lexeme[0]=='+') 
+                {
+                    emitADD(lReg,rReg);
+                }
+                else 
+                {
+                    emitSUB(lReg,rReg);
+                } 
+                break;
+            case MULDIV: 
+                if (root->lexeme[0]=='*') 
+                {
+                    emitMUL(lReg,rReg);
+                }
+                else 
+                {
+                    emitDIV(lReg,rReg);
+                } 
+                break;
+            case AND: 
+                emitAND(lReg, rReg); 
+                break;
+            case OR:  
+                emitOR (lReg, rReg); 
+                break;
+            case XOR: 
+                emitXOR(lReg, rReg); 
+                break;
+            default: 
+                break;
+        }
+        freeReg(rReg); 
+        return lReg;
+    default: 
+        return 0;
     }
 }
 
@@ -677,7 +1076,7 @@ main
 
 int main() {
     initTable();
-    printf(">> ");
+    // printf(">> "); // TO DO: remove this line since we will print the prompt in the main loop instead of in statement()
     while (1) {
         statement();
     }
