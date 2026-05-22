@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <stdarg.h> // TO DO: header file for variable argument functions (va_list, va_start, va_end, etc.)
 
 // for lex
 #define MAXLEN 256
