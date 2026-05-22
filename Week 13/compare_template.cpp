@@ -9,9 +9,13 @@ int compare(const T&v1,const T& v2){
 }
 
 template <class T>
-int sum(const T& v1,const T& v2){
+T /*int*/ sum(const T& v1,const T& v2){
     return (v2 + v1);
 }
+
+/*int sum(const T& v1,const T& v2){ // this version will work but the return type is int, and it cannot be used for char
+    return (v2 + v1);
+}*/
 
 int main(){
     int a = 2, b = 4;
