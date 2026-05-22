@@ -654,7 +654,8 @@ BTNode *expr(void) {
 BTNode *unary_expr(void) { // TODO: unary_expr — handles unary +/- as prefix (builds 0 - x style node)
     BTNode *node;
     if (match(ADDSUB)) {
-        char op[MAXLEN]; strcpy(op, getLexeme());
+        char op[MAXLEN]; 
+        strcpy(op, getLexeme());
         node = makeNode(ADDSUB, op);
         node->left = makeNode(INT, "0");
         advance();
