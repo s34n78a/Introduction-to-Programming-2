@@ -11,23 +11,20 @@ Array_MAX_HEAP::Array_MAX_HEAP() {
     Count = 0;
 }
 
-Array_MAX_HEAP::~Array_MAX_HEAP() {
-    delete[] array;
-}
-
 void Array_MAX_HEAP::PUSH(const int &value) { //root node is stored at index 1.
     if (Count == 0)
     {
         // root node
         array[1] = value;
         Count++;
+        return;
     }
     
-    array[Count + 1] = value;
     Count++;
+    array[Count] = value;
 
-    int parent_idx = (Count) / 2;
     int child_idx = Count;
+    int parent_idx = child_idx / 2;
 
     while (parent_idx > 0 && array[parent_idx] < array[child_idx])
     {
@@ -85,29 +82,95 @@ int Array_MAX_HEAP::POP() {
 
 
 List_MAX_HEAP::List_MAX_HEAP() {
-    root = nullptr;
+    root = NULL;
 }
 
-void List_MAX_HEAP::PUSH(const int &) {
-
+void List_MAX_HEAP::PUSH(const int &value) {
+    if (Count == 0) {
+        root = new ListNode(value);
+        Count++;
+        return;
+    }
+    
+    Count++;
+    ListNode *parent = findparent(Count, root);
+    ListNode *newNode = new ListNode(value);
+    
+    // Determine if this is left or right child
+    if (Count % 2 == 0) {
+        parent->left = newNode;
+    } else {
+        parent->right = newNode;
+    }
+    newNode->parent = parent;
+    
+    // Bubble up
+    ListNode *current = newNode;
+    while (current->parent != NULL && current->value > current->parent->value) {
+        swap(current->value, current->parent->value);
+        current = current->parent;
+    }
 }
 
 int List_MAX_HEAP::MAX() const {
-    return 0;
+    if (Count == 0) {
+        return -1;
+    }
+    return root->value;
 }
 
 int List_MAX_HEAP::POP() {
-    if (Count == 0)
-    {
+    if (Count == 0) {
         return -1; // empty heap
     }
-
-    return 0;
+    
+    int result = root->value;
+    
+    if (Count == 1) {
+        delete root;
+        root = NULL;
+        Count = 0;
+        return result;
+    }
+    
+    ListNode *lastParent = findparent(Count, root);
+    ListNode *lastNode;
+    
+    if (Count % 2 == 0) {
+        lastNode = lastParent->left;
+        lastParent->left = NULL;
+    } else {
+        lastNode = lastParent->right;
+        lastParent->right = NULL;
+    }
+    
+    root->value = lastNode->value;
+    delete lastNode;
+    Count--;
+    
+    // Bubble down
+    ListNode *current = root;
+    while (true) {
+        ListNode *larger = current;
+        
+        if (current->left != NULL && current->left->value > larger->value) {
+            larger = current->left;
+        }
+        if (current->right != NULL && current->right->value > larger->value) {
+            larger = current->right;
+        }
+        
+        if (larger == current) break;
+        
+        swap(current->value, larger->value);
+        current = larger;
+    }
+    
+    return result;
 }
 
 void List_MAX_HEAP::deleteTree(ListNode *root) {
-    if (root == nullptr)
-    {
+    if (root == NULL) {
         return;
     }
 

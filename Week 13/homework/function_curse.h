@@ -13,7 +13,7 @@ public:
     virtual int asInt() const { return 0; }
     virtual string asStr() const { return ""; }
     virtual int arity() const { return 0; }
-    virtual Term *arg(int i) const { return nullptr; }
+    virtual Term *arg(int i) const { return NULL; }
 };
 
 Term *makeNumber(int v);
