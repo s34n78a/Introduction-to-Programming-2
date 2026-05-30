@@ -121,10 +121,16 @@ SearchResult MiniMax::search(
     for(auto& action : state->legal_actions){
         /* [ Hackathon TODO 4-1 ]
          * search this move like TODO 3, but starting from the root */
+        State* next = state->next_state(action);
+        int score = -eval_ctx(next, depth - 1, history, 1, ctx, p);
+        delete next;
 
             if(score > best_score){
                 // [ Hackathon TODO 4-2 ]
                 // keep this move if it is the best so far
+                best_score = score;
+                result.best_move = action;
+                result.score = score;
 
                 if(p.report_partial && ctx.on_root_update){
                    ctx.on_root_update({result.best_move, best_score, depth, move_index + 1, total_moves});
@@ -135,6 +141,9 @@ SearchResult MiniMax::search(
 
     // [ Hackathon TODO 4-3 ]
     // update result and return
+    result.score = best_score;
+    result.depth = depth;
+    result.nodes = ctx.nodes;
 
         return result;
 } 

@@ -135,10 +135,10 @@ int State::evaluate(
         for(int r = 0; r < BOARD_H; r++){
             for(int c = 0; c < BOARD_W; c++){
                 if(self_board[r][c]){
-                    self_score += simple_material[self_board[r][c]];
+                    self_score += simple_material[self_board[r][c] - '0'];
                 }
                 if(oppn_board[r][c]){
-                    oppn_score += simple_material[oppn_board[r][c]];
+                    oppn_score += simple_material[oppn_board[r][c] - '0'];
                 }
             }
         }
