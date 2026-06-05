@@ -70,13 +70,12 @@ int MiniMax::eval_ctx(
         // [Hackathon TODO 3-3]
         // search the child one level deeper
         int score = -eval_ctx(next, depth - 1, history, ply + 1, ctx, p);
-        if(same){
-            score = -score; // Negate back if same player (e.g. Connect6)
-        }
 
         // [Hackathon TODO 3-4]
         // convert raw to the current player's perspective.
-        
+        if(same){
+            score = -score; // Negate back if same player
+        }
 
         delete next;
 
