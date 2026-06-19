@@ -4,7 +4,7 @@
 
 #include "config.hpp"
 #include "state.hpp"
-#include "./policy/registry.hpp"
+#include "./policy/114006263_registry.hpp"
 #include "./policy/game_history.hpp"
 
 

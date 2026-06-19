@@ -1,6 +1,6 @@
 #include <utility>
 #include <algorithm>
-#include "state.hpp"
+#include "114006263_state.hpp"
 #include "114006263_alphabeta.hpp"
 
 int AlphaBetaSearch::alpha_beta(
@@ -121,7 +121,11 @@ SearchResult AlphaBetaSearch::search(
 }
 
 ParamMap AlphaBetaSearch::default_params() {
-    return {{"UseKPEval", "true"}, {"UseEvalMobility", "true"}, {"ReportPartial", "true"}};
+    return {
+        {"UseKPEval", "true"}, 
+        {"UseEvalMobility", "true"}, 
+        {"ReportPartial", "true"}
+    };
 }
 
 std::vector<ParamDef> AlphaBetaSearch::param_defs() {
